@@ -1,0 +1,56 @@
+# =========================
+# CLion / JetBrains
+# =========================
+.idea/
+cmake-build-*/
+out/
+
+# =========================
+# CMake
+# =========================
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+
+# =========================
+# Object files
+# =========================
+*.o
+*.obj
+*.lo
+*.slo
+
+# =========================
+# Libraries
+# =========================
+*.a
+*.lib
+*.so
+*.so.*
+*.dylib
+
+# =========================
+# Executables
+# =========================
+*.exe
+*.out
+*.app
+
+# =========================
+# Debug / profiler output
+# =========================
+*.dSYM/
+*.stackdump
+*.log
+
+# =========================
+# OS junk
+# =========================
+.DS_Store
+Thumbs.db
+
+# =========================
+# Keep only sources & headers
+# (Everything else ignored implicitly)
+# =========================
