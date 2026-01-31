@@ -1,4 +1,7 @@
+#include <stdlib.h>
+#include <c++/cstddef>
 
+#include "listnode.h"
 enum Piece {
     W_PAWN = -1, B_PAWN = -2,
     W_ROOK = -3, B_ROOK = -4,
@@ -7,6 +10,7 @@ enum Piece {
     W_KING = -9, B_KING = -10,
     W_QUEEN = -11, B_QUEEN = -12
 };
+
 
 int is_center_square(int x, int y) {
     return (x == 3 || x == 4) && (y == 3 || y == 4);
@@ -43,6 +47,10 @@ int queen_center_domination(int board[8][8], int qx, int qy) {
     return bishop_center_domination(board, qx, qy) || rook_center_domination(board, qx, qy);
 }
 
+int is_white_piece(int piece) {
+    return (piece & 1) == 0;
+}
+
 double analyse_leaf_board(int board[8][8]) {
     int white_pawns[8], black_pawns[8];
     for(int k=0; k<8; k++) { white_pawns[k] = -1; black_pawns[k] = -1; }
@@ -57,7 +65,7 @@ double analyse_leaf_board(int board[8][8]) {
             if (piece >= 0) continue;
 
             double curr_res = 0;
-            int is_black = ((piece & 1) == 0);
+            int is_black = (piece % 2 == 0);
 
             switch (piece) {
                 case W_PAWN:
@@ -121,6 +129,7 @@ double analyse_leaf_board(int board[8][8]) {
 
                 case B_KING:
                     black_king = 1;
+
                     if (is_center_square(j, i)) curr_res -= 0.4;
 
 
@@ -151,9 +160,95 @@ double analyse_leaf_board(int board[8][8]) {
     }
 
 
+
     if (white_king && !black_king) return 1000000.0;
     if (!white_king && black_king) return -1000000.0;
     if (!white_king && !black_king) return 0.0;
 
     return res;
+}
+
+int is_pinned(int board[8][8], int piece_pos[2], int king_pos[2]) {
+    int px = piece_pos[1], py = piece_pos[0];
+    int kx = king_pos[1], ky = king_pos[0];
+    int dx0 = abs(px - kx);
+    int dy0 = abs(py - ky);
+    if (!(px == kx || py == ky || dx0 == dy0))
+        return 0;
+
+    int dx = (px > kx) - (px < kx);
+    int dy = (py > ky) - (py < ky);
+
+    //dx, dy is direction FROM KING, TO PIECE
+    int x = kx + dx, y = ky + dy;
+    while (x != px || y != py) {
+        if (board[y][x] < 0)
+            return 0;
+        x += dx;
+        y += dy;
+    }
+
+    x = px + dx; y = py + dy;
+    while (x >= 0 && x < 8 && y >= 0 && y < 8 && board[y][x] >= 0) {
+        x += dx, y += dy;
+    }
+    if (x >= 0 && x < 8 && y >= 0 && y < 8) {
+        int attacker = board[y][x];
+        switch (attacker) {
+            case W_BISHOP:
+            case B_BISHOP:
+                if (dx != 0 && dy != 0 && (board[ky][kx] & 1) != (board[y][x] & 1)) {
+                    return 1;
+                }
+                break;
+            case W_ROOK:
+            case B_ROOK:
+                if ((dx == 0 || dy == 0) && (board[ky][kx] & 1) != (board[y][x] & 1)) {
+                    return 1;
+                }
+                break;
+            case B_QUEEN:
+            case W_QUEEN:
+                if ((board[ky][kx] & 1) != (board[y][x] & 1)) {
+                    return 1;
+                }
+                break;
+            default:
+                return 0;
+        }
+
+    }
+    return 0;
+}
+
+
+ListNode* get_legal_moves(int board[8][8], int is_white_tempo, int is_king_under_attack, int king_pos[2]) {
+    //White: piece & 1 == 1, Black: piece & 1 == 0
+
+    ListNode dummy;
+    dummy.next = NULL;
+
+    ListNode* ptail = &dummy;
+
+    for (int i = 0; i < 8; i++) {
+        for (int j = 0; j < 8; j++) {
+            if (board[i][j] >= 0 || ((board[i][j] & 1) != is_white_tempo)) continue;
+            //piece found
+            int piece = board[i][j];
+            switch (piece) {
+
+            }
+        }
+    }
+    return dummy.next;
+}
+
+void free_list(ListNode* phead) {
+    ListNode* pcurr = phead;
+    ListNode* pnext;
+    while (pcurr != NULL) {
+        pnext = pcurr->next;
+        free(pcurr);
+        pcurr = pnext;
+    }
 }
