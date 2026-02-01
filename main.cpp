@@ -17,6 +17,9 @@ enum Piece {
 
 extern "C" {
     double analyse_leaf_board(int board[8][8]);
+    ListNode* get_pseudo_legal_moves(int board[8][8], int is_white_tempo, int is_king_under_attack, int king_pos[2]);
+    void free_list(ListNode* phead);
+    void display_moves(ListNode *phead);
 };
 
 int main() {
@@ -26,15 +29,17 @@ int main() {
             board[i][j] = 0;
         }
     }
-    for (int j = 0; j < 8; j++) {
+    for (int j = 0; j < 8; j += 2) {
         board[1][j] = W_PAWN;
         board[6][j] = B_PAWN;
     }
     board[0][7] = W_KING;
     board[7][0] = B_KING;
-
-    double val = analyse_leaf_board(board);
-    std::cout <<  val << std::endl;
+    board[3][4] = W_KNIGHT;
+    int w_king_pos[2] = {0, 7};
+    ListNode *pmoves = get_pseudo_legal_moves(board, 1, 0, w_king_pos);
+    display_moves(pmoves);
+    free_list(pmoves);
 
     return 0;
 }

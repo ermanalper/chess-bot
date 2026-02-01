@@ -1,7 +1,9 @@
+#include <stdio.h>
 #include <stdlib.h>
-#include <c++/cstddef>
 
 #include "listnode.h"
+#define IS_WHITE(x) (x < 0 && (x % 2 == -1))
+#define IS_BLACK(x) (x < 0 && (x % 2 == 0))
 enum Piece {
     W_PAWN = -1, B_PAWN = -2,
     W_ROOK = -3, B_ROOK = -4,
@@ -167,102 +169,6 @@ double analyse_leaf_board(int board[8][8]) {
 
     return res;
 }
-
-int is_pinned(int board[8][8], const int piece_pos[2], const int king_pos[2], int* can_move_horizontally, int* can_move_vertically,
-    int* can_move_positive_diagonally, int* can_move_negative_diagonally) {
-    *can_move_horizontally = 1; *can_move_vertically = 1; *can_move_positive_diagonally = 1; *can_move_negative_diagonally = 1;
-
-    int px = piece_pos[1], py = piece_pos[0];
-    int kx = king_pos[1], ky = king_pos[0];
-    int dx0 = abs(px - kx);
-    int dy0 = abs(py - ky);
-
-    if ((board[ky][kx] & 1) != (board[py][px] & 1)) return 0; //King and possible-pinned piece are opposite-colored. The func must have been called by mistake
-    if (!(px == kx || py == ky || dx0 == dy0)) return 0;
-
-    int dx = (px > kx) - (px < kx);
-    int dy = (py > ky) - (py < ky);
-
-    int x = kx + dx, y = ky + dy;
-    while (x != px || y != py) {
-        if (board[y][x] < 0) return 0; // another piece between, so the piece mustn't form a pin
-        x += dx; y += dy;
-    }
-
-    x = px + dx; y = py + dy;
-    while (x >= 0 && x < 8 && y >= 0 && y < 8 && board[y][x] >= 0) {
-        x += dx; y += dy;
-    }
-
-    if (x >= 0 && x < 8 && y >= 0 && y < 8) {
-        int attacker = board[y][x];
-        if ((board[ky][kx] & 1) == (attacker & 1)) return 0; //If attacker and king is same-colored (actually not attacker)
-
-        switch (attacker) {
-            case W_BISHOP: case B_BISHOP:
-                if (dx != 0 && dy != 0) {
-                    *can_move_horizontally = 0;
-                    *can_move_vertically = 0;
-                    if (dx == dy) {
-                        *can_move_positive_diagonally = 1;
-                        *can_move_negative_diagonally = 0;
-                    } else {
-                        *can_move_positive_diagonally = 0;
-                        *can_move_negative_diagonally = 1;
-                    }
-                    return 1;
-                }
-                break;
-            case W_ROOK: case B_ROOK:
-                if (dx == 0 ^ dy == 0) {
-                    *can_move_horizontally = (dy == 0);
-                    *can_move_vertically = (dx == 0);
-                    *can_move_positive_diagonally = 0;
-                    *can_move_negative_diagonally = 0;
-                    return 1;
-                }
-                break;
-            case B_QUEEN: case W_QUEEN:
-                *can_move_horizontally = (dy == 0);
-                *can_move_vertically = (dx == 0);
-                *can_move_positive_diagonally = 0; *can_move_negative_diagonally = 0;
-                if (!(*can_move_horizontally) && !(*can_move_vertically)) {
-                    if (dx == dy) {
-                        *can_move_positive_diagonally = 1;
-                        *can_move_negative_diagonally = 0;
-                    } else {
-                        *can_move_positive_diagonally = 0;
-                        *can_move_negative_diagonally = 1;
-                    }
-                }
-                return 1;
-        }
-    }
-    return 0; //out of board, no pin
-}
-
-
-ListNode* get_legal_moves(int board[8][8], int is_white_tempo, int is_king_under_attack, int king_pos[2]) {
-    //White: piece & 1 == 1, Black: piece & 1 == 0
-
-    ListNode dummy;
-    dummy.next = NULL;
-
-    ListNode* ptail = &dummy;
-
-    for (int i = 0; i < 8; i++) {
-        for (int j = 0; j < 8; j++) {
-            if (board[i][j] >= 0 || ((board[i][j] & 1) != is_white_tempo)) continue;
-            //piece found
-            int piece = board[i][j];
-            switch (piece) {
-
-            }
-        }
-    }
-    return dummy.next;
-}
-
 void free_list(ListNode* phead) {
     ListNode* pcurr = phead;
     ListNode* pnext;
@@ -272,3 +178,160 @@ void free_list(ListNode* phead) {
         pcurr = pnext;
     }
 }
+ListNode* create_move(int is0, int is1, int ts0, int ts2) {
+    ListNode *n = malloc(sizeof(ListNode));
+    n->is[0] = is0; n->is[1] = is1;
+    n->ts[0] = ts0; n->ts[1] = ts2;
+    n->next = NULL;
+    return n;
+}
+ListNode* generate_moves_generic(int board[8][8], int i, int j, int dirs[][2], int num_dirs,
+                                 int max_steps, int is_white_tempo, ListNode **ptail, ListNode *phead) {
+    //if enemy king can be captured, return that move, else return NULL (other moves are added to the list)
+    int enemy_king = is_white_tempo ? B_KING : W_KING;
+    for (int d = 0; d < num_dirs; d++) {
+        for (int step = 1; step <= max_steps; step++) {
+            int ni = i + dirs[d][0] * step;
+            int nj = j + dirs[d][1] * step;
+
+            if (ni < 0 || ni >= 8 || nj < 0 || nj >= 8) break; //out of board bounds
+
+            int target = board[ni][nj];
+
+            if (target >= 0) {
+                ListNode *pmove = create_move(i, j, ni, nj);
+                (*ptail)->next = pmove;
+                *ptail = pmove;
+            }
+            else {
+                int is_enemy = is_white_tempo ? IS_BLACK(target) : IS_WHITE(target);
+                if (is_enemy) {
+                    ListNode *pmove = create_move(i, j, ni, nj);
+                    if (target == enemy_king) {
+                        free_list(phead->next);
+                        return pmove;
+                    }
+                    (*ptail)->next = pmove;
+                    *ptail = pmove;
+                }
+                break;
+            }
+        }
+    }
+    return NULL;
+}
+
+ListNode* get_pseudo_legal_moves(int board[8][8], int is_white_tempo, int is_king_under_attack, int king_pos[2]) {
+    //White: piece & 1 == 1, Black: piece & 1 == 0
+    ListNode dummy;
+    dummy.next = NULL;
+    ListNode *ptail = &dummy;
+    ListNode *king_capture;
+    for (int i = 0; i < 8; i++) {
+        for (int j = 0; j < 8; j++) {
+            if (board[i][j] >= 0 || (IS_WHITE(board[i][j]) != is_white_tempo)) continue;
+            int piece = board[i][j];
+            //piece found
+            //perform all moves. if enemy king can be captured, return that move immediately.
+            //than, either an illegal move is played by the opponent, or it's a checkmate. eiter way, the minimax algorithm will try to avoid that branch
+            switch (piece) {
+                case W_PAWN:
+                    if (i + 1 < 8 && board[i + 1][j] >= 0) {
+                        ListNode *pmove = create_move(i, j, i + 1, j);
+                        ptail->next = pmove; ptail = pmove;
+                        if (i == 1 && board[i + 2][j] >= 0) {
+                            ListNode *double_move = create_move(i, j, i + 2, j);
+                            ptail->next = double_move; ptail = double_move;
+                        }
+                    }
+
+                    for (int d = -1; d <= 1 && i + 1 < 8; d += 2) {
+                        if (0 <= j + d && j + d < 8 && (IS_BLACK(board[i + 1][j + d]))) {
+                            ListNode *pmove = create_move(i, j, i + 1, j + d);
+                            if (board[i + 1][j + d] == B_KING) {
+                                //enemy king is capturable
+                                free_list(dummy.next);
+                                return pmove;
+                            } else {
+                                ptail->next = pmove; ptail = pmove;
+                            }
+                        }
+                    }
+                    break;
+                case B_PAWN:
+                    if (i - 1 >= 0 && board[i - 1][j] >= 0) {
+                        ListNode *pmove = create_move(i, j, i - 1, j);
+                        ptail->next = pmove; ptail = pmove;
+                        if (i == 6 && board[i - 2][j] >= 0) {
+                            ListNode *double_move = create_move(i, j, i - 2, j);
+                            ptail->next = double_move; ptail = double_move;
+                        }
+                    }
+
+                    for (int d = -1; d <= 1 && i - 1 >= 0; d += 2) {
+                        if (0 <= j + d && j + d < 8 && (IS_WHITE(board[i - 1][j + d]))) {
+                            ListNode *pmove = create_move(i, j, i - 1, j + d);
+                            if (board[i - 1][j + d] == W_KING) {
+                                //enemy king is capturable
+                                free_list(dummy.next);
+                                return pmove;
+                            } else {
+                                ptail->next = pmove; ptail = pmove;
+                            }
+                        }
+                    }
+                    break;
+
+                case W_KNIGHT: case B_KNIGHT: {
+                    int dirs[8][2] = {{2,1},{2,-1},{-2,1},{-2,-1},{1,2},{1,-2},{-1,2},{-1,-2}};
+                    king_capture = generate_moves_generic(board, i, j, dirs, 8, 1, is_white_tempo, &ptail, &dummy);
+                    if (king_capture) return king_capture;
+                    break;
+                }
+
+                case W_ROOK: case B_ROOK: {
+                    int dirs[4][2] = {{1,0},{-1,0},{0,1},{0,-1}};
+                    king_capture = generate_moves_generic(board, i, j, dirs, 4, 7, is_white_tempo, &ptail, &dummy);
+                    if (king_capture) return king_capture;
+                    break;
+                }
+
+                case W_BISHOP: case B_BISHOP: {
+                    int dirs[4][2] = {{1,1},{1,-1},{-1,1},{-1,-1}};
+                    king_capture = generate_moves_generic(board, i, j, dirs, 4, 7, is_white_tempo, &ptail, &dummy);
+                    if (king_capture) return king_capture;
+                    break;
+                }
+
+                case W_QUEEN: case B_QUEEN: {
+                    int dirs[8][2] = {{1,0},{-1,0},{0,1},{0,-1},{1,1},{1,-1},{-1,1},{-1,-1}};
+                    king_capture = generate_moves_generic(board, i, j, dirs, 8, 7, is_white_tempo, &ptail, &dummy);
+                    if (king_capture) return king_capture;
+                    break;
+                }
+
+                case W_KING: case B_KING: {
+                    int dirs[8][2] = {{1,0},{-1,0},{0,1},{0,-1},{1,1},{1,-1},{-1,1},{-1,-1}};
+                    king_capture = generate_moves_generic(board, i, j, dirs, 8, 1, is_white_tempo, &ptail, &dummy);
+                    if (king_capture) return king_capture;
+                    break;
+                }
+
+
+
+            }
+        }
+    }
+    return dummy.next;
+}
+
+void display_moves(ListNode *phead) {
+    ListNode *pcurr = phead;
+    while (pcurr != NULL) {
+        int is0 = pcurr->is[0]; int is1 = pcurr->is[1];
+        int ts0 = pcurr->ts[0]; int ts1 = pcurr->ts[1];
+        printf("Move: From   %d %d    To   %d %d \n", is0, is1, ts0, ts1);
+        pcurr = pcurr->next;
+    }
+}
+
