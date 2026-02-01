@@ -168,57 +168,77 @@ double analyse_leaf_board(int board[8][8]) {
     return res;
 }
 
-int is_pinned(int board[8][8], int piece_pos[2], int king_pos[2]) {
+int is_pinned(int board[8][8], const int piece_pos[2], const int king_pos[2], int* can_move_horizontally, int* can_move_vertically,
+    int* can_move_positive_diagonally, int* can_move_negative_diagonally) {
+    *can_move_horizontally = 1; *can_move_vertically = 1; *can_move_positive_diagonally = 1; *can_move_negative_diagonally = 1;
+
     int px = piece_pos[1], py = piece_pos[0];
     int kx = king_pos[1], ky = king_pos[0];
     int dx0 = abs(px - kx);
     int dy0 = abs(py - ky);
-    if (!(px == kx || py == ky || dx0 == dy0))
-        return 0;
+
+    if ((board[ky][kx] & 1) != (board[py][px] & 1)) return 0; //King and possible-pinned piece are opposite-colored. The func must have been called by mistake
+    if (!(px == kx || py == ky || dx0 == dy0)) return 0;
 
     int dx = (px > kx) - (px < kx);
     int dy = (py > ky) - (py < ky);
 
-    //dx, dy is direction FROM KING, TO PIECE
     int x = kx + dx, y = ky + dy;
     while (x != px || y != py) {
-        if (board[y][x] < 0)
-            return 0;
-        x += dx;
-        y += dy;
+        if (board[y][x] < 0) return 0; // another piece between, so the piece mustn't form a pin
+        x += dx; y += dy;
     }
 
     x = px + dx; y = py + dy;
     while (x >= 0 && x < 8 && y >= 0 && y < 8 && board[y][x] >= 0) {
-        x += dx, y += dy;
+        x += dx; y += dy;
     }
+
     if (x >= 0 && x < 8 && y >= 0 && y < 8) {
         int attacker = board[y][x];
-        switch (attacker) {
-            case W_BISHOP:
-            case B_BISHOP:
-                if (dx != 0 && dy != 0 && (board[ky][kx] & 1) != (board[y][x] & 1)) {
-                    return 1;
-                }
-                break;
-            case W_ROOK:
-            case B_ROOK:
-                if ((dx == 0 || dy == 0) && (board[ky][kx] & 1) != (board[y][x] & 1)) {
-                    return 1;
-                }
-                break;
-            case B_QUEEN:
-            case W_QUEEN:
-                if ((board[ky][kx] & 1) != (board[y][x] & 1)) {
-                    return 1;
-                }
-                break;
-            default:
-                return 0;
-        }
+        if ((board[ky][kx] & 1) == (attacker & 1)) return 0; //If attacker and king is same-colored (actually not attacker)
 
+        switch (attacker) {
+            case W_BISHOP: case B_BISHOP:
+                if (dx != 0 && dy != 0) {
+                    *can_move_horizontally = 0;
+                    *can_move_vertically = 0;
+                    if (dx == dy) {
+                        *can_move_positive_diagonally = 1;
+                        *can_move_negative_diagonally = 0;
+                    } else {
+                        *can_move_positive_diagonally = 0;
+                        *can_move_negative_diagonally = 1;
+                    }
+                    return 1;
+                }
+                break;
+            case W_ROOK: case B_ROOK:
+                if (dx == 0 ^ dy == 0) {
+                    *can_move_horizontally = (dy == 0);
+                    *can_move_vertically = (dx == 0);
+                    *can_move_positive_diagonally = 0;
+                    *can_move_negative_diagonally = 0;
+                    return 1;
+                }
+                break;
+            case B_QUEEN: case W_QUEEN:
+                *can_move_horizontally = (dy == 0);
+                *can_move_vertically = (dx == 0);
+                *can_move_positive_diagonally = 0; *can_move_negative_diagonally = 0;
+                if (!(*can_move_horizontally) && !(*can_move_vertically)) {
+                    if (dx == dy) {
+                        *can_move_positive_diagonally = 1;
+                        *can_move_negative_diagonally = 0;
+                    } else {
+                        *can_move_positive_diagonally = 0;
+                        *can_move_negative_diagonally = 1;
+                    }
+                }
+                return 1;
+        }
     }
-    return 0;
+    return 0; //out of board, no pin
 }
 
 
