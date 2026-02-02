@@ -4,6 +4,7 @@
 #include "listnode.h"
 #define IS_WHITE(x) (x < 0 && (x % 2 == -1))
 #define IS_BLACK(x) (x < 0 && (x % 2 == 0))
+#define MAX_DEPTH 6
 enum Piece {
     W_PAWN = -1, B_PAWN = -2,
     W_ROOK = -3, B_ROOK = -4,
@@ -186,7 +187,7 @@ ListNode* create_move(int is0, int is1, int ts0, int ts2) {
     return n;
 }
 ListNode* generate_moves_generic(int board[8][8], int i, int j, int dirs[][2], int num_dirs,
-                                 int max_steps, int is_white_tempo, ListNode **ptail, ListNode *phead) {
+                                 int max_steps, int is_white_tempo, ListNode **ptail, ListNode *phead, int *is_king_captured) {
     //if enemy king can be captured, return that move, else return NULL (other moves are added to the list)
     int enemy_king = is_white_tempo ? B_KING : W_KING;
     for (int d = 0; d < num_dirs; d++) {
@@ -209,6 +210,7 @@ ListNode* generate_moves_generic(int board[8][8], int i, int j, int dirs[][2], i
                     ListNode *pmove = create_move(i, j, ni, nj);
                     if (target == enemy_king) {
                         free_list(phead->next);
+                        *is_king_captured = 1;
                         return pmove;
                     }
                     (*ptail)->next = pmove;
@@ -221,7 +223,7 @@ ListNode* generate_moves_generic(int board[8][8], int i, int j, int dirs[][2], i
     return NULL;
 }
 
-ListNode* get_pseudo_legal_moves(int board[8][8], int is_white_tempo, int is_king_under_attack, int king_pos[2]) {
+ListNode* get_pseudo_legal_moves(int board[8][8], int is_white_tempo, int *is_king_captured) {
     //White: piece & 1 == 1, Black: piece & 1 == 0
     ListNode dummy;
     dummy.next = NULL;
@@ -251,6 +253,7 @@ ListNode* get_pseudo_legal_moves(int board[8][8], int is_white_tempo, int is_kin
                             if (board[i + 1][j + d] == B_KING) {
                                 //enemy king is capturable
                                 free_list(dummy.next);
+                                *is_king_captured = 1;
                                 return pmove;
                             } else {
                                 ptail->next = pmove; ptail = pmove;
@@ -274,6 +277,7 @@ ListNode* get_pseudo_legal_moves(int board[8][8], int is_white_tempo, int is_kin
                             if (board[i - 1][j + d] == W_KING) {
                                 //enemy king is capturable
                                 free_list(dummy.next);
+                                *is_king_captured = 1;
                                 return pmove;
                             } else {
                                 ptail->next = pmove; ptail = pmove;
@@ -284,35 +288,35 @@ ListNode* get_pseudo_legal_moves(int board[8][8], int is_white_tempo, int is_kin
 
                 case W_KNIGHT: case B_KNIGHT: {
                     int dirs[8][2] = {{2,1},{2,-1},{-2,1},{-2,-1},{1,2},{1,-2},{-1,2},{-1,-2}};
-                    king_capture = generate_moves_generic(board, i, j, dirs, 8, 1, is_white_tempo, &ptail, &dummy);
+                    king_capture = generate_moves_generic(board, i, j, dirs, 8, 1, is_white_tempo, &ptail, &dummy, is_king_captured);
                     if (king_capture) return king_capture;
                     break;
                 }
 
                 case W_ROOK: case B_ROOK: {
                     int dirs[4][2] = {{1,0},{-1,0},{0,1},{0,-1}};
-                    king_capture = generate_moves_generic(board, i, j, dirs, 4, 7, is_white_tempo, &ptail, &dummy);
+                    king_capture = generate_moves_generic(board, i, j, dirs, 4, 7, is_white_tempo, &ptail, &dummy, is_king_captured);
                     if (king_capture) return king_capture;
                     break;
                 }
 
                 case W_BISHOP: case B_BISHOP: {
                     int dirs[4][2] = {{1,1},{1,-1},{-1,1},{-1,-1}};
-                    king_capture = generate_moves_generic(board, i, j, dirs, 4, 7, is_white_tempo, &ptail, &dummy);
+                    king_capture = generate_moves_generic(board, i, j, dirs, 4, 7, is_white_tempo, &ptail, &dummy, is_king_captured);
                     if (king_capture) return king_capture;
                     break;
                 }
 
                 case W_QUEEN: case B_QUEEN: {
                     int dirs[8][2] = {{1,0},{-1,0},{0,1},{0,-1},{1,1},{1,-1},{-1,1},{-1,-1}};
-                    king_capture = generate_moves_generic(board, i, j, dirs, 8, 7, is_white_tempo, &ptail, &dummy);
+                    king_capture = generate_moves_generic(board, i, j, dirs, 8, 7, is_white_tempo, &ptail, &dummy, is_king_captured);
                     if (king_capture) return king_capture;
                     break;
                 }
 
                 case W_KING: case B_KING: {
                     int dirs[8][2] = {{1,0},{-1,0},{0,1},{0,-1},{1,1},{1,-1},{-1,1},{-1,-1}};
-                    king_capture = generate_moves_generic(board, i, j, dirs, 8, 1, is_white_tempo, &ptail, &dummy);
+                    king_capture = generate_moves_generic(board, i, j, dirs, 8, 1, is_white_tempo, &ptail, &dummy, is_king_captured);
                     if (king_capture) return king_capture;
                     break;
                 }
@@ -333,5 +337,79 @@ void display_moves(ListNode *phead) {
         printf("Move: From   %d %d    To   %d %d \n", is0, is1, ts0, ts1);
         pcurr = pcurr->next;
     }
+}
+
+int make_move(int board[8][8], ListNode *pmove) {
+    //Returns: The piece on the target square, if empty: 0 (or positive garbage value if board is not set properly)
+    int is0 = pmove->is[0]; int is1 = pmove->is[1];
+    int piece = board[is0][is1];
+    int ts0 = pmove->ts[0]; int ts1 = pmove->ts[1];
+    int ret_val = board[ts0][ts1];
+    board[ts0][ts1] = piece;
+    board[is0][is1] = 0;
+    return ret_val;
+}
+void undo_move(int board[8][8], ListNode *pmove, int piece_taken) {
+    int is0 = pmove->is[0]; int is1 = pmove->is[1];
+    int ts0 = pmove->ts[0]; int ts1 = pmove->ts[1];
+    int piece = board[ts0][ts1];
+    board[is0][is1] = piece;
+    board[ts0][ts1] = piece_taken;
+}
+
+double dfs(int board[8][8], const int depth, int is_white_tempo, ListNode **ppmoves_path) {
+    if (depth == MAX_DEPTH) {
+        if (ppmoves_path) *ppmoves_path = NULL;
+        return analyse_leaf_board(board);
+    }
+
+    int is_king_captured = 0;
+    ListNode *pmoves = get_pseudo_legal_moves(board, is_white_tempo, &is_king_captured);
+
+    if (is_king_captured) {
+        if (ppmoves_path) {
+            *ppmoves_path = create_move(pmoves->is[0], pmoves->is[1], pmoves->ts[0], pmoves->ts[1]);
+            (*ppmoves_path)->next = NULL;
+        }
+
+        double score = is_white_tempo ? 1000000.0 : -1000000.0;
+
+        free_list(pmoves);
+        return score;
+    }
+
+    ListNode *pcurr = pmoves;
+    double thresh = is_white_tempo ? -2000000.0 : 2000000.0;
+    ListNode *best_full_path = NULL;
+
+    while (pcurr != NULL) {
+        int piece_taken = make_move(board, pcurr);
+
+        ListNode *child_path = NULL;
+        double curr_path_val = dfs(board, depth + 1, !is_white_tempo, &child_path);
+
+        if ((is_white_tempo && curr_path_val > thresh) || (!is_white_tempo && curr_path_val < thresh)) {
+            thresh = curr_path_val;
+
+            if (best_full_path) free_list(best_full_path);
+
+            best_full_path = create_move(pcurr->is[0], pcurr->is[1], pcurr->ts[0], pcurr->ts[1]);
+            best_full_path->next = child_path;
+        } else {
+            if (child_path) free_list(child_path);
+        }
+
+        undo_move(board, pcurr, piece_taken);
+        pcurr = pcurr->next;
+    }
+
+    if (ppmoves_path) {
+        *ppmoves_path = best_full_path;
+    } else {
+        free_list(best_full_path);
+    }
+
+    free_list(pmoves);
+    return thresh;
 }
 

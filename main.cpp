@@ -17,9 +17,10 @@ enum Piece {
 
 extern "C" {
     double analyse_leaf_board(int board[8][8]);
-    ListNode* get_pseudo_legal_moves(int board[8][8], int is_white_tempo, int is_king_under_attack, int king_pos[2]);
+    ListNode* get_pseudo_legal_moves(int board[8][8], int is_white_tempo);
     void free_list(ListNode* phead);
     void display_moves(ListNode *phead);
+    double dfs(int board[8][8], const int depth, int is_white_tempo, ListNode **ppmoves_path);
 };
 
 int main() {
@@ -29,17 +30,30 @@ int main() {
             board[i][j] = 0;
         }
     }
+    /*
     for (int j = 0; j < 8; j += 2) {
         board[1][j] = W_PAWN;
         board[6][j] = B_PAWN;
-    }
-    board[0][7] = W_KING;
+    }*/
     board[7][0] = B_KING;
-    board[3][4] = W_KNIGHT;
-    int w_king_pos[2] = {0, 7};
-    ListNode *pmoves = get_pseudo_legal_moves(board, 1, 0, w_king_pos);
-    display_moves(pmoves);
-    free_list(pmoves);
+    board[5][0] = W_KING;
+    board[7][1] = W_KNIGHT;
+    board[5][2] = W_PAWN;
+    board[6][3] = W_ROOK;
+    board[7][3] = W_ROOK;
+    board[6][4] = B_ROOK;
+
+   // board[3][4] = W_KNIGHT;
+   // board[3][0] = B_ROOK;
+    //int w_king_pos[2] = {0, 7};
+    ListNode* best_path = nullptr;
+    double eval = dfs(board, 0, 1, &best_path);
+    std::cout << eval << std::endl;
+    if (best_path) {
+        display_moves(best_path);
+        free_list(best_path);
+    }
+
 
     return 0;
 }
