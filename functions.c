@@ -1,6 +1,7 @@
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
-
+#include "hash.h"
 #include "listnode.h"
 #define IS_WHITE(x) (x < 0 && (x % 2 == -1))
 #define IS_BLACK(x) (x < 0 && (x % 2 == 0))
@@ -357,7 +358,17 @@ void undo_move(int board[8][8], ListNode *pmove, int piece_taken) {
     board[ts0][ts1] = piece_taken;
 }
 
-double dfs(int board[8][8], const int depth, int is_white_tempo, ListNode **ppmoves_path) {
+double dfs(int board[8][8], const int depth, int is_white_tempo, ListNode **ppmoves_path, uint64_t zobrist[8][8][12], Entry table[TABLE_SIZE]) {
+    uint64_t key = hash_val(board, zobrist, is_white_tempo);
+    uint32_t ix = map_table(key);
+    int current_remaining_depth = MAX_DEPTH - depth;
+
+    if (table[ix].key == key && table[ix].depth >= current_remaining_depth) {
+        if (ppmoves_path != NULL)
+            *ppmoves_path = NULL;
+        return table[ix].pos_value;
+    }
+
     if (depth == MAX_DEPTH) {
         if (ppmoves_path) *ppmoves_path = NULL;
         return analyse_leaf_board(board);
@@ -386,7 +397,7 @@ double dfs(int board[8][8], const int depth, int is_white_tempo, ListNode **ppmo
         int piece_taken = make_move(board, pcurr);
 
         ListNode *child_path = NULL;
-        double curr_path_val = dfs(board, depth + 1, !is_white_tempo, &child_path);
+        double curr_path_val = dfs(board, depth + 1, !is_white_tempo, &child_path, zobrist, table);
 
         if ((is_white_tempo && curr_path_val > thresh) || (!is_white_tempo && curr_path_val < thresh)) {
             thresh = curr_path_val;
@@ -407,6 +418,17 @@ double dfs(int board[8][8], const int depth, int is_white_tempo, ListNode **ppmo
         *ppmoves_path = best_full_path;
     } else {
         free_list(best_full_path);
+    }
+
+    if (table[ix].depth <= current_remaining_depth) {
+        if (table[ix].pbest_moves != NULL) {
+            free_list(table[ix].pbest_moves);
+        }
+
+        table[ix].key = key;
+        table[ix].depth = current_remaining_depth;
+        table[ix].pos_value = thresh;
+        table[ix].pbest_moves = NULL;
     }
 
     free_list(pmoves);

@@ -5,4 +5,6 @@ set(CMAKE_CXX_STANDARD 20)
 
 add_executable(chess_bot main.cpp
         functions.c
-        listnode.h)
+        listnode.h
+        hash.c
+        hash.h)
