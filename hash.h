@@ -3,7 +3,7 @@
 
 #ifndef CHESS_BOT_HASH_H
 #define CHESS_BOT_HASH_H
-#define TABLE_SIZE 5
+#define TABLE_SIZE 1 << 22
 
 #include <stdint.h>
 #include "listnode.h"

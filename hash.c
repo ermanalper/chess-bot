@@ -5,15 +5,7 @@
 
 #define TABLE_SIZE 1 << 22
 
-void free_list(ListNode* phead) {
-    ListNode* pcurr = phead;
-    ListNode* pnext;
-    while (pcurr != NULL) {
-        pnext = pcurr->next;
-        free(pcurr);
-        pcurr = pnext;
-    }
-}
+
 
 uint64_t splitmix64(uint64_t *seed) {
     uint64_t z = (*seed += 0x9e3779b97f4a7c15ULL);
@@ -66,7 +58,13 @@ uint32_t map_table(uint64_t key) {
 void free_hashed_moves(Entry table[TABLE_SIZE]) {
     for (int i = 0; i < TABLE_SIZE; i++) {
         if (table[i].pbest_moves != NULL) {
-            free_list(table[i].pbest_moves);
+            ListNode* pcurr = table[i].pbest_moves;
+            ListNode* pnext;
+            while (pcurr != NULL) {
+                pnext = pcurr->next;
+                free(pcurr);
+                pcurr = pnext;
+            }
         }
     }
 }

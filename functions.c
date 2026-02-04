@@ -5,7 +5,7 @@
 #include "listnode.h"
 #define IS_WHITE(x) (x < 0 && (x % 2 == -1))
 #define IS_BLACK(x) (x < 0 && (x % 2 == 0))
-#define MAX_DEPTH 6
+#define MAX_DEPTH 5
 enum Piece {
     W_PAWN = -1, B_PAWN = -2,
     W_ROOK = -3, B_ROOK = -4,
@@ -78,8 +78,8 @@ double analyse_leaf_board(int board[8][8]) {
 
                     if (i > 4) curr_res += (i - 4) * 0.15;
 
-                    //double pawns
-                    if (white_pawns[j] != -1) res -= 0.2;
+                    //double pawns - penalize the second pawn
+                    if (white_pawns[j] != -1) curr_res -= 0.2;
                     white_pawns[j] = i;
                     break;
 
@@ -89,8 +89,8 @@ double analyse_leaf_board(int board[8][8]) {
 
                     if (i < 3) curr_res += (3 - i) * 0.15;
 
-                    //double pawns
-                    if (black_pawns[j] != -1) res += 0.2;
+                    //double pawns - penalize the second pawn
+                    if (black_pawns[j] != -1) curr_res -= 0.2;
                     black_pawns[j] = i;
                     break;
 
@@ -120,6 +120,7 @@ double analyse_leaf_board(int board[8][8]) {
 
                 case W_KING:
                     white_king = 1;
+                    curr_res = 0.0;  // Explicitly initialize king value
                     if (is_center_square(j, i)) curr_res -= 0.4;
 
                     //pawn shield
@@ -133,9 +134,8 @@ double analyse_leaf_board(int board[8][8]) {
 
                 case B_KING:
                     black_king = 1;
-
+                    curr_res = 0.0;  // Explicitly initialize king value
                     if (is_center_square(j, i)) curr_res -= 0.4;
-
 
                     if (i >= 6) {
                         int pi = i - 1;
