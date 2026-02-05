@@ -78,8 +78,8 @@ double analyse_leaf_board(int board[8][8]) {
 
                     if (i > 4) curr_res += (i - 4) * 0.15;
 
-                    //double pawns - penalize the second pawn
-                    if (white_pawns[j] != -1) curr_res -= 0.2;
+                    //double pawns
+                    if (white_pawns[j] != -1) res -= 0.2;
                     white_pawns[j] = i;
                     break;
 
@@ -89,8 +89,8 @@ double analyse_leaf_board(int board[8][8]) {
 
                     if (i < 3) curr_res += (3 - i) * 0.15;
 
-                    //double pawns - penalize the second pawn
-                    if (black_pawns[j] != -1) curr_res -= 0.2;
+                    //double pawns
+                    if (black_pawns[j] != -1) res += 0.2;
                     black_pawns[j] = i;
                     break;
 
@@ -120,7 +120,6 @@ double analyse_leaf_board(int board[8][8]) {
 
                 case W_KING:
                     white_king = 1;
-                    curr_res = 0.0;  // Explicitly initialize king value
                     if (is_center_square(j, i)) curr_res -= 0.4;
 
                     //pawn shield
@@ -134,8 +133,9 @@ double analyse_leaf_board(int board[8][8]) {
 
                 case B_KING:
                     black_king = 1;
-                    curr_res = 0.0;  // Explicitly initialize king value
+
                     if (is_center_square(j, i)) curr_res -= 0.4;
+
 
                     if (i >= 6) {
                         int pi = i - 1;
@@ -340,7 +340,7 @@ void display_moves(ListNode *phead) {
     }
 }
 
-int make_move(int board[8][8], ListNode *pmove) {
+int make_move(int board[8][8], ListNode *pmove, int *pawn_promoted) {
     //Returns: The piece on the target square, if empty: 0 (or positive garbage value if board is not set properly)
     int is0 = pmove->is[0]; int is1 = pmove->is[1];
     int piece = board[is0][is1];
@@ -348,12 +348,20 @@ int make_move(int board[8][8], ListNode *pmove) {
     int ret_val = board[ts0][ts1];
     board[ts0][ts1] = piece;
     board[is0][is1] = 0;
+    if ((piece == W_PAWN && ts0 == 7) || (piece == B_PAWN && ts0 == 0)) {
+        *pawn_promoted = 1;
+        if (piece == W_PAWN) {
+            board[ts0][ts1] = W_QUEEN;
+        } else if (piece == B_PAWN) {
+            board[ts0][ts1] = B_QUEEN;
+        }
+    }
     return ret_val;
 }
-void undo_move(int board[8][8], ListNode *pmove, int piece_taken) {
+void undo_move(int board[8][8], ListNode *pmove, int piece_taken, int pawn_promoted) {
     int is0 = pmove->is[0]; int is1 = pmove->is[1];
     int ts0 = pmove->ts[0]; int ts1 = pmove->ts[1];
-    int piece = board[ts0][ts1];
+    int piece = !pawn_promoted ? board[ts0][ts1] : (IS_WHITE(board[ts0][ts1]) ? W_PAWN : B_PAWN);
     board[is0][is1] = piece;
     board[ts0][ts1] = piece_taken;
 }
@@ -367,6 +375,7 @@ double dfs(int board[8][8], const int depth, int is_white_tempo, ListNode **ppmo
         if (ppmoves_path != NULL)
             *ppmoves_path = NULL;
         return table[ix].pos_value;
+
     }
 
     if (depth == MAX_DEPTH) {
@@ -392,9 +401,9 @@ double dfs(int board[8][8], const int depth, int is_white_tempo, ListNode **ppmo
     ListNode *pcurr = pmoves;
     double thresh = is_white_tempo ? -2000000.0 : 2000000.0;
     ListNode *best_full_path = NULL;
-
     while (pcurr != NULL) {
-        int piece_taken = make_move(board, pcurr);
+        int pawn_promoted = 0;
+        int piece_taken = make_move(board, pcurr, &pawn_promoted);
 
         ListNode *child_path = NULL;
         double curr_path_val = dfs(board, depth + 1, !is_white_tempo, &child_path, zobrist, table);
@@ -410,7 +419,7 @@ double dfs(int board[8][8], const int depth, int is_white_tempo, ListNode **ppmo
             if (child_path) free_list(child_path);
         }
 
-        undo_move(board, pcurr, piece_taken);
+        undo_move(board, pcurr, piece_taken, pawn_promoted);
         pcurr = pcurr->next;
     }
 
@@ -421,10 +430,6 @@ double dfs(int board[8][8], const int depth, int is_white_tempo, ListNode **ppmo
     }
 
     if (table[ix].depth <= current_remaining_depth) {
-        if (table[ix].pbest_moves != NULL) {
-            free_list(table[ix].pbest_moves);
-        }
-
         table[ix].key = key;
         table[ix].depth = current_remaining_depth;
         table[ix].pos_value = thresh;
