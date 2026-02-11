@@ -1,13 +1,17 @@
 #include <array>
 #include <iostream>
 #include <stack>
-
+#include <SDL.h>
+#include <windows.h>
 #include "hash.h"
 #include "listnode.h"
 #define MAX_DEPTH 5
 #define TABLE_SIZE 1 << 22
 #define TURN_WHITE true
 #define TURN_BLACK false
+#define WIDTH 1200
+#define HEIGHT 900
+
 enum Piece {
     W_PAWN = -1,
     B_PAWN = -2,
@@ -131,17 +135,98 @@ std::array<std::array<int, 2>, 2> get_player_move(int board[8][8]) {
     }
 }
 
-int main() {
-    int board[8][8];
-    //initialize_board(board);
-    for (auto i = 0; i < 8; i++) {
-        for (auto j = 0; j < 8; j++) {
-            board[i][j] = 0;
+void undo_move(int board[8][8], std::stack<std::array<int, 6>> &move_stack) {
+    for (auto i = 0; i < 2; i++) {
+        std::array<int, 6> past_move = move_stack.top(); move_stack.pop();
+        auto piece_taken = past_move[4];
+        auto past_from_row = past_move[0]; auto past_from_col = past_move[1];
+        auto past_to_row = past_move[2]; auto past_to_col = past_move[3];
+        auto played_piece = board[past_to_row][past_to_col];
+        auto promotion_info = past_move[5];
+        if (promotion_info == 1) {
+            played_piece = W_PAWN;
+        } else if (promotion_info == -1) {
+            played_piece = B_PAWN;
+        }
+        board[past_to_row][past_to_col] = piece_taken;
+        board[past_from_row][past_from_col] = played_piece;
+    }
+}
+
+std::array<int, 2> mapPxToSq(int px, int py)
+{
+    int boardSize = std::min(WIDTH, HEIGHT);
+    int squareSize = boardSize / 8;
+
+    int offsetX = (WIDTH  - boardSize) / 2;
+    int offsetY = (HEIGHT - boardSize) / 2;
+
+    if (px < offsetX || px >= offsetX + boardSize ||
+        py < offsetY || py >= offsetY + boardSize)
+    {
+        return {-1, -1};
+    }
+
+    int x = (px - offsetX) / squareSize;
+    int y = (py - offsetY) / squareSize;
+    y = 7 - y;
+
+    return {x, y};
+}
+void drawBoardOnSDL(int board[8][8], SDL_Surface* psurface)
+{
+    int boardSize = std::min(WIDTH, HEIGHT);
+    int squareSize = boardSize / 8;
+
+    int offsetX = (WIDTH  - boardSize) / 2;
+    int offsetY = (HEIGHT - boardSize) / 2;
+
+    Uint32 lightColor = SDL_MapRGB(psurface->format, 240, 217, 181);
+    Uint32 darkColor  = SDL_MapRGB(psurface->format, 181, 136, 99);
+
+    for (int row = 0; row < 8; ++row)
+    {
+        for (int col = 0; col < 8; ++col)
+        {
+            SDL_Rect rect;
+
+            rect.x = offsetX + col * squareSize;
+            rect.y = offsetY + row * squareSize;
+            rect.w = squareSize;
+            rect.h = squareSize;
+
+            bool isLight = (row + col) % 2 == 0;
+
+            SDL_FillRect(psurface, &rect, isLight ? lightColor : darkColor);
         }
     }
-    board[0][0] = W_KING;
-    board[7][0] = B_KING;
-    board[5][7] = W_PAWN;
+}
+
+int main() {
+    //set SDL2
+    if (SDL_Init(SDL_INIT_VIDEO) != 0) {
+        std::cerr << "SDL_Init Error: ", SDL_GetError();
+        return 1;
+    }
+    SDL_Window* pwindow = SDL_CreateWindow(
+        "Chess",
+        SDL_WINDOWPOS_CENTERED,
+        SDL_WINDOWPOS_CENTERED,
+        WIDTH,
+        HEIGHT,
+        0
+    );
+    if (!pwindow) {
+        std::cerr << "SDL_Init Error: ", SDL_GetError();
+        SDL_Quit();
+        return 1;
+    }
+    SDL_Surface* psurface = SDL_GetWindowSurface(pwindow);
+    SDL_UpdateWindowSurface(pwindow);
+
+
+    int board[8][8];
+    initialize_board(board);
     init_zobrist(zobrist);
     std::stack<std::array<int, 6>> move_stack;
     ListNode* comp_move = nullptr;
@@ -152,94 +237,39 @@ int main() {
 
     draw_board(board);
     int from_row, from_col, to_row, to_col, piece;
-    do {
-        auto pawn_promoted = false;
-        auto disp_move = (int) (move_ctr / 2) + 1;
+    int clicked_sq[2] = {-1, -1};
 
-        piece_taken = 0;
-        move_played = false;
-        if (turn == TURN_WHITE) {
-            std::array<std::array<int, 2>, 2> player_moves = get_player_move(board);
-            from_row = player_moves[0][0];
-            from_col = player_moves[0][1];
-            to_row   = player_moves[1][0];
-            to_col   = player_moves[1][1];
-            if (from_col == -1 && move_stack.size() >= 2) {
-                //undo from stack
-                for (auto i = 0; i < 2; i++) {
-                    std::array<int, 6> past_move = move_stack.top(); move_stack.pop();
-                    auto piece_taken = past_move[4];
-                    auto past_from_row = past_move[0]; auto past_from_col = past_move[1];
-                    auto past_to_row = past_move[2]; auto past_to_col = past_move[3];
-                    auto played_piece = board[past_to_row][past_to_col];
-                    auto promotion_info = past_move[5];
-                    if (promotion_info == 1) {
-                        played_piece = W_PAWN;
-                    } else if (promotion_info == -1) {
-                        played_piece = B_PAWN;
-                    }
-                    board[past_to_row][past_to_col] = piece_taken;
-                    board[past_from_row][past_from_col] = played_piece;
-                }
-            } else {
-                //play move
-                std::cout << "Excellent move! Now it's my turn to think! " << "\n";
-                piece = board[from_row][from_col];
-                piece_taken = board[to_row][to_col];
-                board[from_row][from_col] = 0;
-                if (piece == W_PAWN && to_row == 7) {
-                    piece = W_QUEEN;
-                    pawn_promoted = true;
-                    std::cout << "You've promoted a pawn to queen! " << "\n";
+    auto running = true;
+    SDL_Event e;
+    auto board_changed = true;
+    while (running) {
+        while (SDL_PollEvent(&e)) {
+            if (e.type == SDL_QUIT) {
+                running = false;
+                break;
+            } else if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
+                //get mouse position
+                int x, y; SDL_GetMouseState(&x, &y);
+                std::array<int, 2> sq = mapPxToSq(x, y);
+            //    std::cout << sq[0] << " " << sq[1] << " clicked\n";
 
-                }
-                board[to_row][to_col] = piece;
-                move_played = true;
             }
-
-
-        } else if (turn == TURN_BLACK) {
-            pawn_promoted = false;
-            comp_move = analyse_state(board, 0);
-            from_row = comp_move->is[0]; from_col = comp_move->is[1];
-            to_row = comp_move->ts[0]; to_col = comp_move->ts[1];
-            piece_taken = board[to_row][to_col];
-            piece = board[from_row][from_col];
-
-            board[from_row][from_col] = 0;
-            board[to_row][to_col] = piece;
-            if (piece == B_PAWN && to_row == 0) {
-                board[to_row][to_col] = B_QUEEN;
-                pawn_promoted = true;
-            }
-            std::cout << disp_move << ". I move " << from_row << " " << from_col
-                      << " to " << to_row << " " << to_col;
-            if (pawn_promoted) {
-                std::cout << " = Q ";
-            }
-            std::cout<<"\n";
-            move_played = true;
         }
-        if (move_played) {
-            auto promotion_info = 0;
-            if (pawn_promoted) {
-                promotion_info = -1; //black promoted
-                if (turn == TURN_WHITE) {
-                    promotion_info = 1; //white promoted
-                }
-            }
-            move_stack.push({from_row, from_col, to_row, to_col, piece_taken, promotion_info});
-            turn = !turn;
-            move_ctr += 1;
+        if (board_changed) {
+            drawBoardOnSDL(board, psurface);
+            board_changed = false; //changes applied
+            SDL_UpdateWindowSurface(pwindow);
         }
 
+    }
 
-
-
-    } while (move_ctr == 1  || (comp_move != nullptr && comp_move->next != nullptr));
-
+    SDL_DestroyWindow(pwindow);
+    SDL_Quit();
 
 
     free_hashed_moves(table);
     return 0;
+}
+int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
+    return main();
 }
