@@ -91,6 +91,7 @@ uint64_t zobrist[8][8][12];
 Entry table[TABLE_SIZE];
 
 
+
 void initialize_board(int board[8][8]) {
     for (int i = 2; i < 6; i++) {
         for (int j = 0; j < 8; j++) {
@@ -201,6 +202,16 @@ std::array<int, 2> mapPxToSq(int px, int py)
 
     return {x, y};
 }
+std::array<int, 2> mapSqToPx(int sqX, int sqY) {
+    //returns up-left px
+    int boardSize = std::min(WIDTH, HEIGHT);
+    int boardOffsetX = (WIDTH  - boardSize) / 2;
+    int boardOffsetY = (HEIGHT - boardSize) / 2;
+    int squareSize = boardSize / 8;
+    int x = boardOffsetX + sqX * squareSize;
+    int y = boardOffsetY + (7 - sqY) * squareSize;
+    return {x, y};
+}
 
 void drawBoardOnSDL(int board[8][8], SDL_Surface* psurface)
 {
@@ -243,6 +254,28 @@ void drawBoardOnSDL(int board[8][8], SDL_Surface* psurface)
     }
 }
 
+void highlightSq(int i, int j, SDL_Surface* psurface) {
+    std::array<int, 2> px = mapSqToPx(i, j); //topleft sq
+    int thickness = 4;
+    int x = px[0]; int y = px[1];
+    int boardSize = std::min(WIDTH, HEIGHT);
+    int squareSize = boardSize / 8;
+
+
+    Uint32 red = SDL_MapRGB(psurface->format, 255, 0, 0);
+
+
+    SDL_Rect r1 = {x, y, squareSize, thickness};
+    SDL_Rect r2 = {x, y + squareSize - thickness, squareSize, thickness};
+    SDL_Rect r3 = {x, y, thickness, squareSize};
+    SDL_Rect r4 = {x + squareSize - thickness, y, thickness, squareSize};
+
+    SDL_FillRect(psurface, &r1, red);
+    SDL_FillRect(psurface, &r2, red);
+    SDL_FillRect(psurface, &r3, red);
+    SDL_FillRect(psurface, &r4, red);
+}
+
 int main() {
     //set SDL2
     if (SDL_Init(SDL_INIT_VIDEO) != 0) {
@@ -278,7 +311,7 @@ int main() {
     auto piece_taken = 0;
     auto move_played = false;
 
-    draw_board(board);
+    //draw_board(board);
     int from_row, from_col, to_row, to_col, piece;
     int clicked_sq[2] = {-1, -1};
 
@@ -290,13 +323,34 @@ int main() {
             if (e.type == SDL_QUIT) {
                 running = false;
                 break;
-            } else if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
+            } else if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT && turn == TURN_WHITE) {
                 //get mouse position
                 int x, y; SDL_GetMouseState(&x, &y);
                 std::array<int, 2> sq = mapPxToSq(x, y);
-            //    std::cout << sq[0] << " " << sq[1] << " clicked\n";
+                drawBoardOnSDL(board, psurface); //reset prev click
+                int piece = board[sq[1]][sq[0]];
+                if (piece == 0 || ((piece & 1) == 0) || (sq[0] == clicked_sq[0] && sq[1] == clicked_sq[1])) {
+                    //re-clicked same square or empty square or piece, don't highlight, so it will be unhighlighted
+                    if (clicked_sq[0] != -1 && (clicked_sq[0] != sq[0] || clicked_sq[1] != sq[1])) {
+                        //there was a piece selected before, move that piece to new clicked square
+                        int moving_piece = board[clicked_sq[0]][clicked_sq[1]];
+                        board[sq[1]][sq[0]] = moving_piece;
+                        board[clicked_sq[0]][clicked_sq[1]] = 0;
+                        board_changed = true;
+                        turn = TURN_BLACK;
+                    }
+                    clicked_sq[0] = -1; clicked_sq[1] = -1;
+                } else {
+                    //highlight new clicked square
+                    highlightSq(sq[0], sq[1], psurface);
+                    clicked_sq[0] = sq[1]; clicked_sq[1] = sq[0];
+                }
+                SDL_UpdateWindowSurface(pwindow);
 
             }
+        }
+        if (turn == TURN_BLACK) {
+
         }
         if (board_changed) {
             drawBoardOnSDL(board, psurface);

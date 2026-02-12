@@ -181,7 +181,7 @@ void free_list(ListNode* phead) {
     }
 }
 ListNode* create_move(int is0, int is1, int ts0, int ts2) {
-    ListNode *n = malloc(sizeof(ListNode));
+    ListNode *n =(ListNode*) malloc(sizeof(ListNode));
     n->is[0] = is0; n->is[1] = is1;
     n->ts[0] = ts0; n->ts[1] = ts2;
     n->next = NULL;
