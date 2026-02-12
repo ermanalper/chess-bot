@@ -1,3 +1,4 @@
+#include <thread>
 #include <array>
 #include <iostream>
 #include <stack>
@@ -113,14 +114,15 @@ void initialize_board(int board[8][8]) {
     board[7][3] = B_QUEEN;  board[7][4] = B_KING;
 }
 
-ListNode* analyse_state(int board[8][8], int is_white_tempo) {
+void analyse_state(ListNode*& output, int board[8][8], int is_white_tempo, std::atomic<bool>& move_returned) {
     uint64_t key = hash_val(board, zobrist, is_white_tempo);
     uint32_t ix = map_table(key);
     if (table[ix].key == key && table[ix].depth >= MAX_DEPTH) {
         /*if (table[ix].pbest_moves) {
             display_moves(table[ix].pbest_moves);
         }*/
-        return table[ix].pbest_moves;
+        output = table[ix].pbest_moves;
+        return;
     }
     if (table[ix].pbest_moves != nullptr) {
         free_list(table[ix].pbest_moves);
@@ -136,7 +138,9 @@ ListNode* analyse_state(int board[8][8], int is_white_tempo) {
     table[ix].depth = MAX_DEPTH;
     table[ix].pos_value = eval;
     table[ix].pbest_moves = best_path;
-    return best_path;
+    output = best_path;
+    move_returned = true; //finish dfs
+    return;
 }
 
 std::array<std::array<int, 2>, 2> get_player_move(int board[8][8]) {
@@ -277,6 +281,9 @@ void highlightSq(int i, int j, SDL_Surface* psurface) {
 }
 
 int main() {
+    //engine thread
+    std::thread engine_thread;
+
     //set SDL2
     if (SDL_Init(SDL_INIT_VIDEO) != 0) {
         std::cerr << "SDL_Init Error: ", SDL_GetError();
@@ -310,11 +317,11 @@ int main() {
     auto turn = TURN_WHITE;
     auto piece_taken = 0;
     auto move_played = false;
-
+    std::atomic<bool> move_returned(false);
     //draw_board(board);
-    int from_row, from_col, to_row, to_col, piece;
+    int from_row, from_col, to_row, to_col;
     int clicked_sq[2] = {-1, -1};
-
+    bool dfsrunning = false;
     auto running = true;
     SDL_Event e;
     auto board_changed = true;
@@ -323,7 +330,7 @@ int main() {
             if (e.type == SDL_QUIT) {
                 running = false;
                 break;
-            } else if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT && turn == TURN_WHITE) {
+            } else if (turn == TURN_WHITE && e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
                 //get mouse position
                 int x, y; SDL_GetMouseState(&x, &y);
                 std::array<int, 2> sq = mapPxToSq(x, y);
@@ -349,13 +356,39 @@ int main() {
 
             }
         }
-        if (turn == TURN_BLACK) {
 
+        if (turn == TURN_BLACK) {
+            if (!dfsrunning) {
+                dfsrunning = true;
+                move_returned = false;
+                int board_copy[8][8];
+                memcpy(board_copy, board, sizeof(board));
+
+                engine_thread = std::thread(analyse_state,
+                                            std::ref(comp_move),
+                                            board_copy,
+                                            0,
+                                            std::ref(move_returned));
+                engine_thread.detach();
+
+            }
+            if (move_returned) {
+                //play move
+                from_row = comp_move->is[0]; from_col = comp_move->is[1];
+                to_row = comp_move->ts[0]; to_col = comp_move->ts[1];
+                auto piece = board[from_row][from_col];
+                board[from_row][from_col] = 0;
+                board[to_row][to_col] = piece;
+                board_changed = true;
+                turn = TURN_WHITE;
+                dfsrunning = false;
+            }
         }
         if (board_changed) {
             drawBoardOnSDL(board, psurface);
             board_changed = false; //changes applied
             SDL_UpdateWindowSurface(pwindow);
+
         }
 
     }
