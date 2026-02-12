@@ -28,6 +28,108 @@ enum Piece {
     W_QUEEN = -11,
     B_QUEEN = -12
 };
+void drawChar(SDL_Surface* surface, char c, int x, int y, int scale, Uint32 color)
+{
+    const uint8_t* bitmap = nullptr;
+
+    static const uint8_t G[7] = {
+        0b01110,
+        0b10001,
+        0b10000,
+        0b10111,
+        0b10001,
+        0b10001,
+        0b01110
+    };
+
+    static const uint8_t E[7] = {
+        0b11111,
+        0b10000,
+        0b11110,
+        0b10000,
+        0b10000,
+        0b10000,
+        0b11111
+    };
+
+    static const uint8_t R[7] = {
+        0b11110,
+        0b10001,
+        0b11110,
+        0b10100,
+        0b10010,
+        0b10001,
+        0b10001
+    };
+
+    static const uint8_t I[7] = {
+        0b11111,
+        0b00100,
+        0b00100,
+        0b00100,
+        0b00100,
+        0b00100,
+        0b11111
+    };
+
+    static const uint8_t A[7] = {
+        0b01110,
+        0b10001,
+        0b10001,
+        0b11111,
+        0b10001,
+        0b10001,
+        0b10001
+    };
+
+    static const uint8_t L[7] = {
+        0b10000,
+        0b10000,
+        0b10000,
+        0b10000,
+        0b10000,
+        0b10000,
+        0b11111
+    };
+
+    switch(c) {
+        case 'G': bitmap = G; break;
+        case 'E': bitmap = E; break;
+        case 'R': bitmap = R; break;
+        case 'I': bitmap = I; break;
+        case 'A': bitmap = A; break;
+        case 'L': bitmap = L; break;
+        default: return;
+    }
+
+    for (int row = 0; row < 7; ++row) {
+        for (int col = 0; col < 5; ++col) {
+            if (bitmap[row] & (1 << (4 - col))) {
+                SDL_Rect pixel = {
+                    x + col * scale,
+                    y + row * scale,
+                    scale,
+                    scale
+                };
+                SDL_FillRect(surface, &pixel, color);
+            }
+        }
+    }
+}
+void drawText(SDL_Surface* surface, const char* text,
+              int x, int y, int scale, Uint32 color)
+{
+    int cursor = x;
+    for (int i = 0; text[i] != '\0'; ++i) {
+        if (text[i] == ' ') {
+            cursor += 6 * scale;
+            continue;
+        }
+        drawChar(surface, text[i], cursor, y, scale, color);
+        cursor += 6 * scale;
+    }
+}
+
 SDL_Surface* pieceSurfaces[13];
 SDL_Surface* loadImage(const char* path)
 {
@@ -121,6 +223,7 @@ void analyse_state(ListNode*& output, int board[8][8], int is_white_tempo, std::
         /*if (table[ix].pbest_moves) {
             display_moves(table[ix].pbest_moves);
         }*/
+        move_returned = true; //finish dfs
         output = table[ix].pbest_moves;
         return;
     }
@@ -280,6 +383,38 @@ void highlightSq(int i, int j, SDL_Surface* psurface) {
     SDL_FillRect(psurface, &r4, red);
 }
 
+std::array<std::array<int, 2>, 2>
+draw_undo_button(SDL_Surface* psurface)
+{
+    int boardSize = std::min(HEIGHT, WIDTH);
+    int xOffset = ((WIDTH + boardSize) / 2) + 10;
+    int yOffset = HEIGHT / 2;
+
+    SDL_Rect button = {xOffset, yOffset, 120, 40};
+
+    Uint32 bg = SDL_MapRGB(psurface->format, 255,  0, 0);
+    Uint32 white = SDL_MapRGB(psurface->format, 255, 255, 255);
+
+    SDL_FillRect(psurface, &button, bg);
+
+    int scale = 3;
+    int textWidth = 6 * 7 * scale;
+    int textHeight = 7 * scale;
+
+    int textX = button.x + (button.w - textWidth) / 2;
+    int textY = button.y + (button.h - textHeight) / 2;
+
+    drawText(psurface, "GERI AL", textX, textY, scale, white);
+
+    return {{{button.x, button.y},
+             {button.x + button.w, button.y + button.h}}};
+}
+
+
+bool isUndoButttonClicked(int x, int y, std::array<std::array<int, 2>, 2> undoBtn) {
+    return x >= undoBtn[0][0] && x <= undoBtn[1][0] && y >= undoBtn[0][1] && y <= undoBtn[1][1];
+}
+
 int main() {
     //engine thread
     std::thread engine_thread;
@@ -313,10 +448,7 @@ int main() {
     init_zobrist(zobrist);
     std::stack<std::array<int, 6>> move_stack;
     ListNode* comp_move = nullptr;
-    auto move_ctr = 0;
     auto turn = TURN_WHITE;
-    auto piece_taken = 0;
-    auto move_played = false;
     std::atomic<bool> move_returned(false);
     //draw_board(board);
     int from_row, from_col, to_row, to_col;
@@ -325,6 +457,8 @@ int main() {
     auto running = true;
     SDL_Event e;
     auto board_changed = true;
+    std::array<std::array<int, 2>, 2> undoBtn = draw_undo_button(psurface);
+
     while (running) {
         while (SDL_PollEvent(&e)) {
             if (e.type == SDL_QUIT) {
@@ -333,26 +467,38 @@ int main() {
             } else if (turn == TURN_WHITE && e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
                 //get mouse position
                 int x, y; SDL_GetMouseState(&x, &y);
-                std::array<int, 2> sq = mapPxToSq(x, y);
-                drawBoardOnSDL(board, psurface); //reset prev click
-                int piece = board[sq[1]][sq[0]];
-                if (piece == 0 || ((piece & 1) == 0) || (sq[0] == clicked_sq[0] && sq[1] == clicked_sq[1])) {
-                    //re-clicked same square or empty square or piece, don't highlight, so it will be unhighlighted
-                    if (clicked_sq[0] != -1 && (clicked_sq[0] != sq[0] || clicked_sq[1] != sq[1])) {
-                        //there was a piece selected before, move that piece to new clicked square
-                        int moving_piece = board[clicked_sq[0]][clicked_sq[1]];
-                        board[sq[1]][sq[0]] = moving_piece;
-                        board[clicked_sq[0]][clicked_sq[1]] = 0;
-                        board_changed = true;
-                        turn = TURN_BLACK;
-                    }
-                    clicked_sq[0] = -1; clicked_sq[1] = -1;
+                if (isUndoButttonClicked(x, y, undoBtn) && move_stack.size() >= 2) {
+                    undo_move(board, move_stack);
+                    board_changed = true;
                 } else {
-                    //highlight new clicked square
-                    highlightSq(sq[0], sq[1], psurface);
-                    clicked_sq[0] = sq[1]; clicked_sq[1] = sq[0];
+                    std::array<int, 2> sq = mapPxToSq(x, y);
+                    drawBoardOnSDL(board, psurface); //reset prev click
+                    int piece = board[sq[1]][sq[0]];
+                    if (piece == 0 || ((piece & 1) == 0) || (sq[0] == clicked_sq[0] && sq[1] == clicked_sq[1])) {
+                        //re-clicked same square or empty square or piece, don't highlight, so it will be unhighlighted
+                        if (clicked_sq[0] != -1 && (clicked_sq[0] != sq[0] || clicked_sq[1] != sq[1])) {
+                            //there was a piece selected before, move that piece to new clicked square
+                            int moving_piece = board[clicked_sq[0]][clicked_sq[1]];
+                            board[sq[1]][sq[0]] = moving_piece;
+                            bool promotion = false;
+                            if (moving_piece == W_PAWN && sq[1] == 7) {
+                                board[sq[1]][sq[0]] = W_QUEEN;
+                                promotion = true;
+                            }
+                            board[clicked_sq[0]][clicked_sq[1]] = 0;
+                            board_changed = true;
+                            turn = TURN_BLACK;
+                            move_stack.push({clicked_sq[0], clicked_sq[1], sq[1], sq[0], piece, promotion}); //piece is the piece taken (if there is)
+                        }
+                        clicked_sq[0] = -1; clicked_sq[1] = -1;
+                    } else {
+                        //highlight new clicked square
+                        highlightSq(sq[0], sq[1], psurface);
+                        clicked_sq[0] = sq[1]; clicked_sq[1] = sq[0];
+                    }
+                    SDL_UpdateWindowSurface(pwindow);
                 }
-                SDL_UpdateWindowSurface(pwindow);
+
 
             }
         }
@@ -376,12 +522,19 @@ int main() {
                 //play move
                 from_row = comp_move->is[0]; from_col = comp_move->is[1];
                 to_row = comp_move->ts[0]; to_col = comp_move->ts[1];
+                auto piece_taken = board[to_row][to_col];
                 auto piece = board[from_row][from_col];
                 board[from_row][from_col] = 0;
+                bool promotion = false;
                 board[to_row][to_col] = piece;
+                if (piece == B_PAWN && to_row == 0) {
+                    board[to_row][to_col] = B_QUEEN;
+                    promotion = true;
+                }
                 board_changed = true;
                 turn = TURN_WHITE;
                 dfsrunning = false;
+                move_stack.push({from_row, from_col, to_row, to_col, piece_taken, promotion});
             }
         }
         if (board_changed) {
