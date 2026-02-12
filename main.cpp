@@ -2,6 +2,7 @@
 #include <iostream>
 #include <stack>
 #include <SDL.h>
+#include <SDL_image.h>
 #include <windows.h>
 #include "hash.h"
 #include "listnode.h"
@@ -26,6 +27,33 @@ enum Piece {
     W_QUEEN = -11,
     B_QUEEN = -12
 };
+SDL_Surface* pieceSurfaces[13];
+SDL_Surface* loadImage(const char* path)
+{
+    SDL_Surface* loaded = IMG_Load(path);
+    if (!loaded) {
+        printf("IMG_Load error: %s\n", IMG_GetError());
+    }
+    return loaded;
+}
+
+void loadPieces()
+{
+    pieceSurfaces[-W_PAWN]   = loadImage("assets/white-pawn.png");
+    pieceSurfaces[-B_PAWN]   = loadImage("assets/black-pawn.png");
+    pieceSurfaces[-W_ROOK]   = loadImage("assets/white-rook.png");
+    pieceSurfaces[-B_ROOK]   = loadImage("assets/black-rook.png");
+    pieceSurfaces[-W_KNIGHT] = loadImage("assets/white-knight.png");
+    pieceSurfaces[-B_KNIGHT] = loadImage("assets/black-knight.png");
+    pieceSurfaces[-W_BISHOP] = loadImage("assets/white-bishop.png");
+    pieceSurfaces[-B_BISHOP] = loadImage("assets/black-bishop.png");
+    pieceSurfaces[-W_QUEEN]  = loadImage("assets/white-queen.png");
+    pieceSurfaces[-B_QUEEN]  = loadImage("assets/black-queen.png");
+    pieceSurfaces[-W_KING]   = loadImage("assets/white-king.png");
+    pieceSurfaces[-B_KING]   = loadImage("assets/black-king.png");
+}
+
+
 std::string getPieceSymbol(int piece) {
     switch (piece) {
         case W_PAWN:   return " P "; case B_PAWN:   return " p ";
@@ -173,6 +201,7 @@ std::array<int, 2> mapPxToSq(int px, int py)
 
     return {x, y};
 }
+
 void drawBoardOnSDL(int board[8][8], SDL_Surface* psurface)
 {
     int boardSize = std::min(WIDTH, HEIGHT);
@@ -198,6 +227,18 @@ void drawBoardOnSDL(int board[8][8], SDL_Surface* psurface)
             bool isLight = (row + col) % 2 == 0;
 
             SDL_FillRect(psurface, &rect, isLight ? lightColor : darkColor);
+            auto piece = board[7 - row][col];
+            if (piece != 0) {
+                SDL_Surface* pieceImg = pieceSurfaces[-piece];
+
+                SDL_Rect dst;
+                dst.x = rect.x;
+                dst.y = rect.y;
+                dst.w = squareSize;
+                dst.h = squareSize;
+
+                SDL_BlitScaled(pieceImg, NULL, psurface, &dst);
+            }
         }
     }
 }
@@ -223,7 +264,9 @@ int main() {
     }
     SDL_Surface* psurface = SDL_GetWindowSurface(pwindow);
     SDL_UpdateWindowSurface(pwindow);
-
+    //set sdl image
+    IMG_Init(IMG_INIT_PNG);
+    loadPieces();
 
     int board[8][8];
     initialize_board(board);
@@ -271,5 +314,7 @@ int main() {
     return 0;
 }
 int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
+    //set sdl image
+
     return main();
 }

@@ -27,10 +27,21 @@ if (MINGW)
     list(REMOVE_ITEM SDL2_LIB_CORE "mingw32" "-mwindows")
 endif()
 
+# Locate SDL2_image (built/installed next to SDL2)
+find_library(SDL2_IMAGE_LIBRARY
+        NAMES SDL2_image
+        HINTS "${SDL2_PATH}"
+        PATH_SUFFIXES lib
+)
+
+if (NOT SDL2_IMAGE_LIBRARY)
+    message(FATAL_ERROR "SDL2_image library not found near ${SDL2_PATH}. Make sure SDL2_image is installed into that prefix.")
+endif()
+
 add_executable(chess_bot
         main.cpp
         functions.c
         hash.c
 )
 
-target_link_libraries(chess_bot ${SDL2_LIB_CORE})
+target_link_libraries(chess_bot ${SDL2_LIB_CORE} ${SDL2_IMAGE_LIBRARY})
