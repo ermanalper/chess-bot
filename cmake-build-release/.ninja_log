@@ -1,0 +1,6 @@
+# ninja log v6
+2	18	7926239711022217	clean	7d8baf796ead3a04
+6	104	7926239711602469	CMakeFiles/chess_bot.dir/hash.c.obj	58a990fe090ce329
+4	241	7926239711571440	CMakeFiles/chess_bot.dir/functions.c.obj	8f37e080c29b222b
+2	1369	7926239711551346	CMakeFiles/chess_bot.dir/main.cpp.obj	d23ed0a6428300fc
+1370	1443	7926239725230171	chess_bot.exe	c22396fb74b673a2

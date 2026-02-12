@@ -1,0 +1,3 @@
+D:/dev_e_yedek/repos/CLionProjects/chess-bot/cmake-build-release/CMakeFiles/chess_bot.dir
+D:/dev_e_yedek/repos/CLionProjects/chess-bot/cmake-build-release/CMakeFiles/edit_cache.dir
+D:/dev_e_yedek/repos/CLionProjects/chess-bot/cmake-build-release/CMakeFiles/rebuild_cache.dir
