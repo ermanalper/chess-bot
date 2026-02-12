@@ -11,8 +11,8 @@
 #define TABLE_SIZE 1 << 22
 #define TURN_WHITE true
 #define TURN_BLACK false
-#define WIDTH 1200
-#define HEIGHT 900
+#define WIDTH 800
+#define HEIGHT 600
 
 enum Piece {
     W_PAWN = -1,
